@@ -8,12 +8,19 @@ app = FastAPI(title="User Service", version="1.0.0")
 
 
 def get_conn():
+    host = os.getenv("POSTGRES_HOST")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    if not host or not user or not password:
+        raise RuntimeError("Database configuration is incomplete. Set POSTGRES_HOST, POSTGRES_USER, and POSTGRES_PASSWORD.")
+
     return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST"),
+        host=host,
         port=int(os.getenv("POSTGRES_PORT", 5432)),
         database=os.getenv("POSTGRES_DB", "postgres"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
+        user=user,
+        password=password,
         sslmode=os.getenv("POSTGRES_SSLMODE", "require"),
     )
 
@@ -30,7 +37,11 @@ def health():
 
 @app.get("/users")
 def list_users():
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cur = conn.cursor()
     cur.execute("SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC")
     rows = cur.fetchall()
@@ -51,7 +62,11 @@ def list_users():
 
 @app.get("/users/{user_id}")
 def get_user(user_id: str):
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cur = conn.cursor()
     cur.execute("SELECT id, username, email, role, created_at FROM users WHERE id = %s", (user_id,))
     row = cur.fetchone()
@@ -64,7 +79,11 @@ def get_user(user_id: str):
 
 @app.put("/users/{user_id}")
 def update_user(user_id: str, update: UserUpdate):
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cur = conn.cursor()
     if update.email:
         cur.execute("UPDATE users SET email = %s WHERE id = %s", (update.email, user_id))
@@ -76,7 +95,11 @@ def update_user(user_id: str, update: UserUpdate):
 
 @app.delete("/users/{user_id}")
 def delete_user(user_id: str):
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cur = conn.cursor()
     cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()

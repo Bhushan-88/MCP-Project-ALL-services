@@ -17,12 +17,19 @@ pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ── DB connection ─────────────────────────────────────────────
 def get_conn():
+    host = os.getenv("POSTGRES_HOST")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+
+    if not host or not user or not password:
+        raise RuntimeError("Database configuration is incomplete. Set POSTGRES_HOST, POSTGRES_USER, and POSTGRES_PASSWORD.")
+
     return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST"),
+        host=host,
         port=int(os.getenv("POSTGRES_PORT", 5432)),
         database=os.getenv("POSTGRES_DB", "postgres"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
+        user=user,
+        password=password,
         sslmode=os.getenv("POSTGRES_SSLMODE", "require"),
     )
 
@@ -103,7 +110,11 @@ def health():
 def register(req: RegisterRequest):
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cur = conn.cursor()
     try:
         cur.execute(
@@ -122,7 +133,10 @@ def register(req: RegisterRequest):
 
 @app.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest):
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     cur = conn.cursor()
     cur.execute("SELECT password, role FROM users WHERE username = %s", (req.username,))
     row = cur.fetchone()
